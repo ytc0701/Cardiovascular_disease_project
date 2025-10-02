@@ -1,0 +1,20 @@
+# IDE 設定
+.idea/
+
+# Python 暫存檔
+__pycache__/
+*.pyc
+
+# 資料與模型
+data/
+*.csv
+*.xlsx
+*.h5
+*.pkl
+
+# 環境設定
+.env
+
+# 日誌與暫存
+*.log
+*.tmp
