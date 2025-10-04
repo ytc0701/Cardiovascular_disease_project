@@ -139,14 +139,12 @@ class CardioPreprocessor:
         self.df = df.copy()
 
     def one_hot_from_map(self, col, mapping, prefix):
-        """將數值欄位依 mapping 轉換成多個 0/1 欄位"""
         for val, name in mapping.items():
             self.df[f"{prefix}_{name}"] = (self.df[col] == val).astype(int)
         self.df.drop(columns=[col], inplace=True)
         return self
 
     def categorize_and_onehot(self, col, bins, labels, prefix):
-        """依區間分類並做 one-hot encoding"""
         self.df[f"{col}_group"] = pd.cut(self.df[col], bins=bins, labels=labels, right=True)
         dummies = pd.get_dummies(self.df[f"{col}_group"], prefix=prefix, dtype=int)
         self.df = pd.concat([self.df, dummies], axis=1)
@@ -154,7 +152,6 @@ class CardioPreprocessor:
         return self
 
     def process_age(self):
-        """處理年齡欄位 (天數轉年 + 分組 one-hot)"""
         age_bins = [28, 34, 44, 54, 64]
         age_labels = ['young_adult','early_middle','middle','late_middle']
         self.df['age_years'] = self.df['age'] // 365
@@ -163,14 +160,12 @@ class CardioPreprocessor:
         return self
 
     def process_gender(self):
-        """性別轉 one-hot"""
         self.df['male'] = (self.df['gender'] == 1).astype(int)
         self.df['female'] = 1 - self.df['male']
         self.df.drop(columns=['gender'], inplace=True)
         return self
 
     def process_bmi(self):
-        """BMI 計算與分組 one-hot"""
         bmi_bins = [0, 18.5, 25, 30, 100]
         bmi_labels = ['underweight','normal','overweight','obese']
         self.df['BMI'] = self.df['weight'] / ((self.df['height']/100)**2)
@@ -179,7 +174,6 @@ class CardioPreprocessor:
         return self
 
     def process_bp(self):
-        """血壓分類與 one-hot"""
         def classify_bp(sbp, dbp):
             if sbp < 120 and dbp < 80:
                 return 'normal'
@@ -196,7 +190,6 @@ class CardioPreprocessor:
         return self
 
     def transform(self):
-        """整合所有前處理步驟"""
         (self
          .one_hot_from_map('cholesterol', {1:'nor', 2:'abnor', 3:'wellabnor'}, 'chole')
          .one_hot_from_map('gluc', {1:'nor', 2:'abnor', 3:'wellabnor'}, 'gluc')
@@ -208,9 +201,9 @@ class CardioPreprocessor:
         return self.df
 
 
-# 使用方式
-if __name__ == "__main__":
-    data = pd.read_csv('Cardiovascular Disease Dataset.csv', sep=';')
+# ✅ 提供一個函式，讓其他檔案可以直接 import 使用
+def load_and_preprocess(path="data/Cardiovascular Disease Dataset.csv"):
+    data = pd.read_csv(path, sep=';')
     features = ['age','gender','height','weight','ap_hi','ap_lo','cholesterol','gluc','smoke','alco','active']
     X = data[features]
     y = data['cardio']
@@ -218,5 +211,11 @@ if __name__ == "__main__":
     preprocessor = CardioPreprocessor(X)
     X_processed = preprocessor.transform()
 
+    return X_processed, y
+
+
+if __name__ == "__main__":
+    # 測試用
+    X_processed, y = load_and_preprocess()
     pd.set_option('display.max_columns', None)
     print(X_processed.head(20))

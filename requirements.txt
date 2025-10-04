@@ -1,31 +1,33 @@
-# 基礎工具
+# === 基礎工具 ===
 numpy>=1.24,<2.0
 pandas>=2.0,<3.0
+scipy>=1.11,<2.0
 scikit-learn>=1.3,<2.0
 matplotlib>=3.7,<4.0
 seaborn>=0.12,<0.13
 
-# 機器學習/深度學習
+# === 機器學習/梯度提升樹 ===
 xgboost>=1.7,<2.0
 lightgbm>=4.0,<5.0
+catboost>=1.2,<2.0
 optuna>=3.5,<4.0
 
-# 深度學習框架 (二選一或都裝)
+# === 深度學習框架 (二選一或都裝) ===
 torch>=2.0,<3.0
 torchvision>=0.15,<1.0
 tensorflow>=2.13,<3.0
 
-# API & 部署
+# === API & 部署 ===
 fastapi>=0.110,<1.0
 uvicorn[standard]>=0.29,<1.0
 pydantic>=2.0,<3.0
 
-# 可選：前端展示
+# === 可選：前端展示 ===
 streamlit>=1.31,<2.0
 gradio>=4.0,<5.0
 
-# 模型解釋 (Explainable AI)
+# === 模型解釋 (Explainable AI) ===
 shap>=0.44,<1.0
 
-# Jupyter 環境 (方便 Notebook EDA)
+# === Jupyter 環境 (方便 Notebook EDA) ===
 jupyter>=1.0,<2.0
