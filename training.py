@@ -22,7 +22,7 @@ class ModelTrainer:
         self.X = X
         self.y = y
         self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
+            X, y, test_size=0.2, random_state=40
         )
 
     def evaluate_model(self, model, name):
@@ -68,7 +68,7 @@ class ModelTrainer:
         return self.evaluate_model(model, "Neural Network (MLP)")
 
     # 4️⃣ 其他模型
-    def train_knn(self, k=5):
+    def train_knn(self, k):
         return self.evaluate_model(KNeighborsClassifier(n_neighbors=k), f"kNN (k={k})")
 
     def train_naive_bayes(self):
@@ -89,5 +89,5 @@ if __name__ == "__main__":
     trainer.train_lightgbm()
     trainer.train_catboost()
     trainer.train_nn()
-    trainer.train_knn(k=5)
+    trainer.train_knn(5)
     trainer.train_naive_bayes()

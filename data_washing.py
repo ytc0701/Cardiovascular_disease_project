@@ -1,10 +1,11 @@
-import pandas as pd
+# import pandas as pd
 #
 # # 讀取資料,使用 sep=';' 告訴 pandas 每個欄位是用分號分隔
-# data = pd.read_csv('Cardiovascular Disease Dataset.csv', sep=';')
+# data = pd.read_csv('data/Cardiovascular Disease Dataset.csv', sep=';')
 # # print(data.head())
 # # print(data.tail())
 # # print(data.shape)
+# pd.set_option('display.max_columns', None)
 # print(data.info())
 # print(data.describe())
 # # 查看每個欄位有多少種獨特值
@@ -128,7 +129,7 @@ import pandas as pd
 # X = pd.concat([X, pd.get_dummies(X['bp_category'], prefix='bp', dtype=int)], axis=1)
 # X.drop(columns=['ap_hi','ap_lo','bp_category'], inplace=True)
 #
-# pd.set_option('display.max_columns', None)
+#
 #
 # print(X.head(20))
 
@@ -137,6 +138,20 @@ import pandas as pd
 class CardioPreprocessor:
     def __init__(self, df):
         self.df = df.copy()
+
+    def delete_strange(self):
+        df = self.df
+        # 年齡限制
+        df = df[(df['age'] / 365 >= 0) & (df['age'] / 365 <= 150)]
+        # 身高體重
+        df = df[(df['height'] >= 100) & (df['height'] <= 300)]
+        df = df[(df['weight'] >= 30) & (df['weight'] <= 200)]
+        # 血壓範圍
+        df = df[(df['ap_hi'] >= 80) & (df['ap_hi'] <= 200)]
+        df = df[(df['ap_lo'] >= 0) & (df['ap_lo'] <= 130)]
+        df = df[df['ap_hi'] > df['ap_lo']]
+        self.df = df
+        return self
 
     def one_hot_from_map(self, col, mapping, prefix):
         for val, name in mapping.items():
@@ -191,6 +206,7 @@ class CardioPreprocessor:
 
     def transform(self):
         (self
+         .delete_strange()
          .one_hot_from_map('cholesterol', {1:'nor', 2:'abnor', 3:'wellabnor'}, 'chole')
          .one_hot_from_map('gluc', {1:'nor', 2:'abnor', 3:'wellabnor'}, 'gluc')
          .process_age()
@@ -210,6 +226,7 @@ def load_and_preprocess(path="data/Cardiovascular Disease Dataset.csv"):
 
     preprocessor = CardioPreprocessor(X)
     X_processed = preprocessor.transform()
+    XX_processed, y = X_processed.align(y, axis=0, join='inner')
 
     return X_processed, y
 
@@ -219,3 +236,5 @@ if __name__ == "__main__":
     X_processed, y = load_and_preprocess()
     pd.set_option('display.max_columns', None)
     print(X_processed.head(20))
+    print(X_processed.info())
+    print(X_processed.shape, y.shape)
