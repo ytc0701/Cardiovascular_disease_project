@@ -115,7 +115,7 @@ def plot_3d_scatter(X, y, x_col='ap_hi', y_col='ap_lo', z_col='age_years'):
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection='3d')
 
-    # 根據 y 分類顏色
+    # 根據 y 分類顏色 藍=0 紅=1
     colors = ['blue' if label == 0 else 'red' for label in y]
 
     ax.scatter(X[x_col], X[y_col], X[z_col], c=colors, alpha=0.6, s=20)
@@ -127,6 +127,7 @@ def plot_3d_scatter(X, y, x_col='ap_hi', y_col='ap_lo', z_col='age_years'):
 
     plt.tight_layout()
     plt.show()
+
 
 
 if __name__ == "__main__":
