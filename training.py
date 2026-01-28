@@ -1,33 +1,29 @@
-from data_washing import load_and_preprocess
+from data_washing import load_and_preprocess,plot_3d_scatter
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC, LinearSVC
+from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import BernoulliNB
-from sklearn.model_selection import RandomizedSearchCV, GridSearchCV
+from sklearn.model_selection import  GridSearchCV
+
+from sklearn.metrics import confusion_matrix, roc_curve, auc, precision_recall_curve
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import itertools
 
 # XGBoost / LightGBM / CatBoost
 from xgboost import XGBClassifier
 from lightgbm import LGBMClassifier
 from catboost import CatBoostClassifier
 
-
-# Neural Network
-from sklearn.neural_network import MLPClassifier
-
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, roc_curve, auc, ConfusionMatrixDisplay, precision_recall_curve
-
-
-
 import tensorflow as tf
-from tensorflow.keras import layers, models
+from tensorflow.keras import layers, models 
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.metrics import Recall
 
 
 class ModelTrainer:
@@ -53,59 +49,53 @@ class ModelTrainer:
     def train_logistic(self):
         return self.evaluate_model(LogisticRegression(max_iter=1000), "Logistic Regression")
 
-    def train_linear_svm(self):
-        return self.evaluate_model(LinearSVC(max_iter=2000), "Linear SVM")
+    def tune_linear_svm(self):
+        param_grid = {
+            'C': [1],
+            'max_iter': [2000],
+            'loss': ['hinge', 'squared_hinge']
+        }
+        model = LinearSVC(random_state=42)
+        best_model = self.tune_model(model, param_grid, "Linear SVM")
+        return self.evaluate_model(best_model, "Linear SVM (Tuned)")
 
     # 2️⃣ 樹模型
-    def train_decision_tree(self):
-        return self.evaluate_model(DecisionTreeClassifier(random_state=42), "Decision Tree")
-
-    def train_random_forest(self):
-        return self.evaluate_model(RandomForestClassifier(n_estimators=100, random_state=42), "Random Forest")
-
-    def train_xgboost(self):
-        return self.evaluate_model(XGBClassifier(n_estimators=200, learning_rate=0.05, max_depth=6, subsample=0.8,
-                                                 colsample_bytree=0.8, random_state=42, eval_metric="logloss"),"XGBoost")
-
-    def train_lightgbm(self):
-        return self.evaluate_model(LGBMClassifier(random_state=42), "LightGBM")
-
-    def train_catboost(self):
-        return self.evaluate_model(CatBoostClassifier(verbose=0, random_state=42), "CatBoost")
+    def tune_decision_tree(self):
+        param_grid = {
+            'max_depth': [5, 10, 15],
+            'min_samples_split': [2, 5, 10],
+            'min_samples_leaf': [1, 2, 4],
+            'criterion': ['gini', 'entropy']
+        }
+        model = DecisionTreeClassifier(random_state=42)
+        best_model = self.tune_model(model, param_grid, "Decision Tree")
+        return self.evaluate_model(best_model, "Decision Tree (Tuned)")
 
     # 4️⃣ 其他模型
-    def train_knn(self, k):
-        return self.evaluate_model(KNeighborsClassifier(n_neighbors=k), f"kNN (k={k})")
+    def tune_knn(self):
+        param_grid = {
+            'n_neighbors': [3, 5, 7, 9],
+            'weights': ['uniform', 'distance'],
+            'metric': ['euclidean', 'manhattan']
+        }
+        model = KNeighborsClassifier()
+        best_model = self.tune_model(model, param_grid, "kNN")
+        return self.evaluate_model(best_model, "kNN (Tuned)")
 
-    def train_naive_bayes(self):
-        return self.evaluate_model(BernoulliNB(), "Naive Bayes")
+    def tune_naive_bayes(self):
+        param_grid = {
+            'alpha': [0.01, 0.05 ,0.1],
+            'binarize': [ 1.0, 2.0]
+        }
+        model = BernoulliNB()
+        best_model = self.tune_model(model, param_grid, "Naive Bayes")
+        return self.evaluate_model(best_model, "Naive Bayes (Tuned)")
 
 
-    # ========================
-    # 🧠 超參數搜尋模組
-    # ========================
-    def tune_model(self, model, param_grid, model_name, n_iter=20):
-        """使用 RandomizedSearchCV 尋找最佳參數"""
-        search = GridSearchCV(
-            estimator=model,
-            param_grid=param_grid,
-            scoring='accuracy',
-            cv=5,
-            n_jobs=-1,
-            verbose=1
-        )
-        search.fit(self.X_train, self.y_train)
-        print(f"\n🔍 {model_name} Best Params: {search.best_params_}")
-        print(f"Best CV Accuracy: {search.best_score_:.4f}")
-        return search.best_estimator_
-
-    # ========================
-    # 各模型的超參數搜尋
-    # ========================
     def tune_random_forest(self):
         param_grid = {
             'n_estimators': [500],
-            'max_depth': [10],
+            'max_depth': [15],
             'min_samples_split': [10],
             'min_samples_leaf': [4],
             'max_features': ['sqrt']
@@ -185,21 +175,94 @@ class ModelTrainer:
         plt.show()
     
         return best_thresh
+    # ========================
+    # 🧠 超參數搜尋模組
+    # ========================
+    def tune_model(self, model, param_grid, model_name):
+        """使用 GridSearchCV 尋找最佳參數"""
+        search = GridSearchCV(
+            estimator=model,
+            param_grid=param_grid,
+            scoring='accuracy',
+            cv=5,
+            n_jobs=-1,
+            verbose=1
+        )
+        search.fit(self.X_train, self.y_train)
+        print(f"\n🔍 {model_name} Best Params: {search.best_params_}")
+        print(f"Best CV Accuracy: {search.best_score_:.4f}")
+        return search.best_estimator_
 
+    def visualize_model_performance(self, model, model_name):
+        """顯示混淆矩陣與 ROC 曲線（含清晰標註）"""
+        preds = model.predict(self.X_test)
+        probs = None
+    
+        # 混淆矩陣
+        cm = confusion_matrix(self.y_test, preds)
+        cm_sum = np.sum(cm)
+        cm_perc = cm / cm_sum * 100
+    
+        plt.figure(figsize=(6, 5))
+        ax = sns.heatmap(
+            cm,
+            cmap='Blues',
+            cbar=False,
+            linewidths=1,
+            linecolor='white',
+            square=True
+        )
+    
+        # 手動標註每個格子（數值 + 百分比）
+        for i in range(cm.shape[0]):
+            for j in range(cm.shape[1]):
+                c = cm[i, j]
+                p = cm_perc[i, j]
+                text = f"{c}\n({p:.1f}%)"
+                ax.text(j + 0.5, i + 0.5, text, ha='center', va='center',
+                        color='black', fontsize=12, fontweight='bold')
+    
+        plt.title(f"{model_name} - Confusion Matrix", fontsize=16, weight='bold')
+        plt.xlabel("Predicted Label", fontsize=12)
+        plt.ylabel("True Label", fontsize=12)
+        plt.xticks([0.5, 1.5], ['0', '1'])
+        plt.yticks([0.5, 1.5], ['0', '1'])
+        plt.tight_layout()
+        plt.show()
+    
+        # ROC 曲線
+        if hasattr(model, "predict_proba"):
+            probs = model.predict_proba(self.X_test)[:, 1]
+        elif hasattr(model, "decision_function"):
+            probs = model.decision_function(self.X_test)
+    
+        if probs is not None:
+            fpr, tpr, _ = roc_curve(self.y_test, probs)
+            roc_auc = auc(fpr, tpr)
+            print(f"{model_name} AUC: {roc_auc:.4f}")
+            plt.figure(figsize=(6, 5))
+            plt.plot(fpr, tpr, label=f"ROC curve (area = {roc_auc:.2f})")
+            plt.plot([0, 1], [0, 1], 'k--')
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title(f"{model_name} - ROC Curve")
+            plt.legend(loc='lower right')
+            plt.grid(True)
+            plt.show()
+    
 
     # 3️⃣ 神經網路
     def train_nn(self):
+        import matplotlib.pyplot as plt
         # 建構模型
         model = models.Sequential([
             layers.Input(shape=(self.X_train.shape[1],)),
-            layers.Dense(12, activation='relu'),
-            layers.Dense(9, activation='relu'),
-            layers.Dense(6, activation='relu'),
-            layers.Dense(3, activation='relu'),
+            layers.Dense(9, activation='sigmoid'),
+            layers.Dense(5, activation='tanh'),
             layers.Dense(1, activation='sigmoid')
         ])
         optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['accuracy', Recall()])
     
         # EarlyStopping
         es = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
@@ -207,7 +270,7 @@ class ModelTrainer:
         # 模型訓練
         history = model.fit(
             self.X_train, self.y_train,
-            epochs=100,
+            epochs=1000,
             batch_size=64,
             callbacks=[es],
             verbose=1,
@@ -216,55 +279,77 @@ class ModelTrainer:
     
         # 預測機率
         probs = model.predict(self.X_test).reshape(-1)
+        print(probs[:100])
+
     
         # 找出最佳 threshold
         best_j_thresh = self.find_best_threshold_by_youden_j(self.y_test, probs)
         best_f1_thresh = self.find_best_threshold_by_f1(self.y_test, probs)
-    
+        
         print(f"\nBest threshold by Youden’s J index: {best_j_thresh:.4f}")
         print(f"Best threshold by F1-score: {best_f1_thresh:.4f}")
+        
+        
+
+
     
-        # 使用最佳 F1 threshold 預測
-        preds = (probs > best_j_thresh).astype(int)
-        acc = accuracy_score(self.y_test, preds)
-        print(f"\n[Threshold = {best_f1_thresh:.4f}] Accuracy: {acc:.4f}")
-        print(classification_report(self.y_test, preds))
-        
-        
         # 混淆矩陣
-        cm = confusion_matrix(self.y_test, preds)
-        cm_sum = np.sum(cm)
-        cm_perc = cm / cm_sum * 100
+        def plot_confusion_matrix(y_true, y_pred):
+            import numpy as np
+            import matplotlib.pyplot as plt
+            cm = confusion_matrix(y_true, y_pred)
+            cm_sum = np.sum(cm)
+            cm_perc = cm / cm_sum * 100
+            
+            plt.figure(figsize=(6, 5))
+            ax = sns.heatmap(
+                cm,
+                cmap='Reds',
+                cbar=False,
+                linewidths=1,
+                linecolor='white',
+                square=True
+            )
+            
+            # 手動標註每個格子
+            for i in range(cm.shape[0]):
+                for j in range(cm.shape[1]):
+                    c = cm[i, j]
+                    p = cm_perc[i, j]
+                    text = f"{c}\n({p:.1f}%)"
+                    ax.text(j + 0.5, i + 0.5, text, ha='center', va='center',
+                            color='black', fontsize=12, fontweight='bold')
+            
+            plt.title("Neural Network - Confusion Matrix", fontsize=16, weight='bold')
+            plt.xlabel("Predicted Label", fontsize=12)
+            plt.ylabel("True Label", fontsize=12)
+            plt.xticks([0.5, 1.5], ['0', '1'])
+            plt.yticks([0.5, 1.5], ['0', '1'])
+            plt.tight_layout()
+            plt.show()
         
-        plt.figure(figsize=(6, 5))
-        ax = sns.heatmap(
-            cm,
-            cmap='Reds',
-            cbar=False,
-            linewidths=1,
-            linecolor='white',
-            square=True
-        )
         
-        # 手動標註每個格子
-        for i in range(cm.shape[0]):
-            for j in range(cm.shape[1]):
-                c = cm[i, j]
-                p = cm_perc[i, j]
-                text = f"{c}\n({p:.1f}%)"
-                ax.text(j + 0.5, i + 0.5, text, ha='center', va='center',
-                        color='black', fontsize=12, fontweight='bold')
+        # 原預測以0.5為Threshold
+        preds = (probs > 0.5).astype(int)
+        acc = accuracy_score(self.y_test, preds)
+        print(f"\n[Origin probs] Accuracy: {acc:.4f}")
+        print(classification_report(self.y_test, preds))
+        plot_confusion_matrix(self.y_test, preds)
         
-        plt.title("Neural Network - Confusion Matrix", fontsize=16, weight='bold')
-        plt.xlabel("Predicted Label", fontsize=12)
-        plt.ylabel("True Label", fontsize=12)
-        plt.xticks([0.5, 1.5], ['0', '1'])
-        plt.yticks([0.5, 1.5], ['0', '1'])
-        plt.tight_layout()
-        plt.show()
-
-
+        # 使用best_j_thresh為Threshold的預測
+        best_j_preds = (probs > best_j_thresh).astype(int)
+        best_j_acc = accuracy_score(self.y_test, best_j_preds)
+        print(f"\n[Threshold = {best_j_thresh:.4f}] Accuracy: {best_j_acc:.4f}")
+        print(classification_report(self.y_test, best_j_preds))
+        plot_confusion_matrix(self.y_test, best_j_preds)
     
+        # 使用最佳 F1 threshold為Threshold的預測
+        best_f1_preds = (probs > best_f1_thresh).astype(int)
+        best_f1_acc = accuracy_score(self.y_test, best_f1_preds)
+        print(f"\n[Threshold = {best_f1_thresh:.4f}] Accuracy: {best_f1_acc:.4f}")
+        print(classification_report(self.y_test, best_f1_preds))
+        plot_confusion_matrix(self.y_test, best_f1_preds)
+        
         # ROC 曲線繪製
         fpr, tpr, _ = roc_curve(self.y_test, probs)
         roc_auc = auc(fpr, tpr)
@@ -278,85 +363,179 @@ class ModelTrainer:
         plt.legend(loc='lower right')
         plt.grid(True)
         plt.show()
-    
-        return model, self.X_test, self.y_test, best_j_thresh
+        
+        
+        
 
 
-
-
-    def visualize_model_performance(self, model, model_name):
-        """顯示混淆矩陣與ROC曲線"""
-        preds = model.predict(self.X_test)
-        probs = None
-
-        # 混淆矩陣
-        cm = confusion_matrix(self.y_test, preds)
-        cm_sum = np.sum(cm)
-        cm_perc = cm / cm_sum * 100
-
-        annot = np.empty_like(cm).astype(str)
-        nrows, ncols = cm.shape
-
-        for i in range(nrows):
-            for j in range(ncols):
-                c = cm[i, j]
-                p = cm_perc[i, j]
-                annot[i, j] = f"{c}\n({p:.1f}%)"
-
-        plt.figure(figsize=(6, 5))
-        ax = sns.heatmap(
-            cm,
-            annot=annot,
-            fmt='',
-            cmap='Blues',
-            cbar=False,
-            linewidths=1,
-            linecolor='white',
-            square=True,
-            annot_kws={"size": 12, "weight": "bold"}
-        )
-
-        for text, color in zip(ax.texts, ax.collections[0].get_facecolors()):
-            r, g, b, _ = color
-            brightness = (r + g + b) / 3
-            text.set_color('black' if brightness > 0.6 else 'white')
-
-        plt.title(f"{model_name} - Confusion Matrix", fontsize=16, weight='bold')
-        plt.xlabel("Predicted Label", fontsize=12)
-        plt.ylabel("True Label", fontsize=12)
-        plt.tight_layout()
+        import numpy as np
+        import matplotlib.pyplot as plt
+        
+        # 建立 logit 範圍
+        logits = np.linspace(-10, 10, 1000)
+        
+        # 套用 sigmoid
+        sigmoid = 1 / (1 + np.exp(-logits))
+        
+        plt.figure(figsize=(8,6))
+        
+        # 畫 logit 曲線（直接顯示原始值）
+        plt.plot(logits, logits, label="Logit (linear output)", color="orange")
+        
+        # 畫 sigmoid 曲線（壓縮到 0~1）
+        plt.plot(logits, sigmoid, label="Sigmoid (probability)", color="blue")
+        
+        # 標記 logit=0 對應 sigmoid=0.5
+        plt.axvline(0, color="red", linestyle="--", label="Logit=0 → Sigmoid=0.5")
+        
+        plt.title("Logit vs Sigmoid Curve")
+        plt.xlabel("Logit value")
+        plt.ylabel("Output")
+        plt.legend()
+        plt.grid(True)
         plt.show()
 
-        # 如果模型有 predict_proba 或 decision_function，可畫 ROC 曲線
-        if hasattr(model, "predict_proba"):
-            probs = model.predict_proba(self.X_test)[:, 1]
-        elif hasattr(model, "decision_function"):
-            probs = model.decision_function(self.X_test)
-        else:
-            probs = None
-
-        if probs is not None:
-            fpr, tpr, _ = roc_curve(self.y_test, probs)
-            roc_auc = auc(fpr, tpr)
-            print(f"{model_name} AUC: {roc_auc:.4f}")
+    
+        return model, self.X_test, self.y_test, best_j_thresh, probs
+    
+        
+        
+    def train_nn_with_optuna(self, n_trials=200):
+        import optuna
+        import tensorflow as tf
+        from tensorflow.keras import layers, models
+        from tensorflow.keras.callbacks import EarlyStopping
+        from sklearn.metrics import recall_score, accuracy_score, confusion_matrix, classification_report
+    
+        def build_model(trial):
+            model = models.Sequential()
+            model.add(layers.Input(shape=(self.X_train.shape[1],)))
+            # n_layers = trial.suggest_int("n_layers", 1, 4)
+    
+            # for i in range(2):
+            num_hidden = trial.suggest_int("n_units_0", 2, 11)
+            # activation = trial.suggest_categorical(f"activation_{i}", ["sigmoid","relu","elu","tanh"])
+            model.add(layers.Dense(num_hidden, activation="sigmoid"))
+            num_hidden = trial.suggest_int("n_units_1", 2, 11)
+            model.add(layers.Dense(num_hidden, activation="tanh"))
+            
+            model.add(layers.Dense(1, activation="sigmoid"))
+            return model
+    
+        def objective(trial):
+            model = build_model(trial)
+            optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+    
+            model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
+            es = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+    
+            model.fit(
+                self.X_train, self.y_train,
+                validation_data=(self.X_test, self.y_test),
+                epochs=100,
+                batch_size=trial.suggest_categorical("batch_size", [32, 64]),
+                callbacks=[es],
+                verbose=0
+            )
+    
+            probs = model.predict(self.X_test).reshape(-1)
+            preds = (probs > 0.4).astype(int)
+    
+            # 計算 Recall 與 Accuracy
+            recall = recall_score(self.y_test, preds)
+            acc = accuracy_score(self.y_test, preds)
+            print(f"Recall: {recall:.4f}")
+            print(f"Accuracy: {acc:.4f}")
+            # 複合指標：同時考慮 Recall 與 Accuracy
+            score = 0.6 * recall + 0.4 * acc
+            return score
+    
+        # Optuna 搜尋
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=n_trials)
+        best_params = study.best_trial.params
+        print("\nBest trial:", best_params)
+    
+        # 使用最佳參數重建模型
+        model = models.Sequential()
+        model.add(layers.Input(shape=(self.X_train.shape[1],)))
+        for i in range(1):
+            units = best_params.get(f"n_units_{i}")
+            act = best_params.get(f"activation_{i}")
+            model.add(layers.Dense(units, activation=act))
+        model.add(layers.Dense(1, activation="sigmoid"))
+    
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics=['binary_accuracy'])
+        es = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+    
+        model.fit(
+            self.X_train, self.y_train,
+            validation_data=(self.X_test, self.y_test),
+            epochs=100,
+            batch_size=best_params["batch_size"],
+            callbacks=[es],
+            verbose=1
+        )
+    
+        raw_probs = model.predict(self.X_test).reshape(-1)
+        preds = (raw_probs > 0.4).astype(int)
+    
+        # 最終輸出 Recall 與 Accuracy
+        recall = recall_score(self.y_test, preds)
+        acc = accuracy_score(self.y_test, preds)
+    
+        print(f"\nFinal Recall: {recall:.4f}")
+        print(f"Final Accuracy: {acc:.4f}")
+        print(classification_report(self.y_test, preds, target_names=["No CVD","CVD"]))
+        
+        # 混淆矩陣
+        def plot_confusion_matrix(y_true, y_pred):
+            cm = confusion_matrix(y_true, y_pred)
+            cm_sum = np.sum(cm)
+            cm_perc = cm / cm_sum * 100
+            
             plt.figure(figsize=(6, 5))
-            plt.plot(fpr, tpr, label=f"ROC curve (area = {roc_auc:.2f})")
-            plt.plot([0, 1], [0, 1], 'k--')
-            plt.xlabel('False Positive Rate')
-            plt.ylabel('True Positive Rate')
-            plt.title(f"{model_name} - ROC Curve")
-            plt.legend(loc='lower right')
+            ax = sns.heatmap(
+                cm,
+                cmap='Reds',
+                cbar=False,
+                linewidths=1,
+                linecolor='white',
+                square=True
+            )
+            
+            # 手動標註每個格子
+            for i in range(cm.shape[0]):
+                for j in range(cm.shape[1]):
+                    c = cm[i, j]
+                    p = cm_perc[i, j]
+                    text = f"{c}\n({p:.1f}%)"
+                    ax.text(j + 0.5, i + 0.5, text, ha='center', va='center',
+                            color='black', fontsize=12, fontweight='bold')
+            
+            plt.title("Neural Network - Confusion Matrix", fontsize=16, weight='bold')
+            plt.xlabel("Predicted Label", fontsize=12)
+            plt.ylabel("True Label", fontsize=12)
+            plt.xticks([0.5, 1.5], ['0', '1'])
+            plt.yticks([0.5, 1.5], ['0', '1'])
+            plt.tight_layout()
             plt.show()
+        plot_confusion_matrix(self.y_test, preds)
+        
+        return model, self.X_test, self.y_test, raw_probs
+
+
 
     
+
+
 def plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="blue"):
     """
     繪製所有特徵兩兩組合的錯誤預測散點圖矩陣（正方形比例、點小、字小、避免重疊）
     label_filter: "blue" → 只畫真實標籤為 1；"red" → 只畫真實標籤為 0；"all" → 同時畫
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    import itertools
+
 
     # 預測
     probs = model.predict(X_test).reshape(-1)
@@ -418,8 +597,6 @@ def plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="bl
     plt.show()
 
 
-
-
 def summarize_feature_value_by_true_label_in_errors(model, X_test, y_test, threshold, top_n=10, visualize=True):
     """
     分析錯誤與正確預測樣本中，各特徵在 y=0 和 y=1 下的平均值與差異
@@ -427,9 +604,7 @@ def summarize_feature_value_by_true_label_in_errors(model, X_test, y_test, thres
     - 顯示 y 分布
     - 可選擇是否進行 3D 視覺化
     """
-    import numpy as np
-    import pandas as pd
-    from data_washing import plot_3d_scatter
+
 
     # 預測
     probs = model.predict(X_test).reshape(-1)
@@ -473,10 +648,52 @@ def summarize_feature_value_by_true_label_in_errors(model, X_test, y_test, thres
 
     # 分析正確樣本
     analyze_subset(X_correct, y_correct, label="正確樣本")
+    
+    # 錯誤樣本細分
+    false_neg_idx = X_test.index[(preds == 0) & (y_test == 1)]  # y=1 被預測為 0
+    false_pos_idx = X_test.index[(preds == 1) & (y_test == 0)]  # y=0 被預測為 1
+    
+    X_fn = X_test.loc[false_neg_idx]
+    X_fp = X_test.loc[false_pos_idx]
+    
+    # 要分析的類別特徵
+    cat_features = ['active', 'smoke', 'gender', 'alco']
+    
+    print("\n🔍 錯誤樣本中 y=1 被預測為 0（False Negatives）各特徵的獨特值數量：")
+    for col in cat_features:
+        print(f"{col}: {X_fn[col].value_counts().to_dict()}")
+    
+    print("\n🔍 錯誤樣本中 y=0 被預測為 1（False Positives）各特徵的獨特值數量：")
+    for col in cat_features:
+        print(f"{col}: {X_fp[col].value_counts().to_dict()}")
+    
+  
+
+def plot_heatmap_for_subset(df, features, title):
+    corr = df[features].corr()
+    plt.figure(figsize=(5.5, 4.5))
+    sns.heatmap(corr, annot=True, cmap='coolwarm', fmt=".2f", square=True,
+                cbar_kws={"shrink": 0.8}, linewidths=0.5, linecolor='white')
+    plt.title(title, fontsize=13, weight='bold')
+    plt.tight_layout()
+    plt.show()
 
 
+def plot_confusion_quadrant_heatmaps(X_test, y_test, preds, features):
+    """繪製 TP/TN/FP/FN 四象限中指定特徵的 Pearson 關聯性 heatmap"""
+    quadrants = {
+        "True Positives (y=1, pred=1)": X_test[(preds == 1) & (y_test == 1)],
+        "True Negatives (y=0, pred=0)": X_test[(preds == 0) & (y_test == 0)],
+        "False Positives (y=0, pred=1)": X_test[(preds == 1) & (y_test == 0)],
+        "False Negatives (y=1, pred=0)": X_test[(preds == 0) & (y_test == 1)],
+    }
 
-
+    for title, df in quadrants.items():
+        print(f"\n📊 {title} 樣本數量：{len(df)}")
+        if len(df) >= 2:  # 至少兩筆資料才能計算相關性
+            plot_heatmap_for_subset(df, features, title)
+        else:
+            print(f"⚠️ {title} 樣本不足，無法繪製 heatmap")
 
     
  
@@ -494,20 +711,17 @@ if __name__ == "__main__":
     # trainer.tune_lightgbm()
     # trainer.tune_catboost()
     # trainer.tune_logistic()
-
-    # # 逐一訓練模型
-    # trainer.train_logistic()
-    # trainer.train_linear_svm()
-    # trainer.train_decision_tree()
-    # trainer.train_random_forest()
-    # trainer.train_xgboost()
-    # trainer.train_lightgbm()
-    # trainer.train_catboost()
-    model, X_test, y_test, threshold = trainer.train_nn()
-    # trainer.train_knn(5)
-    # trainer.train_naive_bayes()
+    # trainer.tune_knn()
+    # trainer.tune_linear_svm()
+    # trainer.tune_decision_tree()
+    trainer.tune_naive_bayes()
+    
+    # model, X_test, y_test, threshold, preds = trainer.train_nn()
     # plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="blue")  # 只畫藍點
     # plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="red")   # 只畫紅點
-    plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="all")   # 同時畫紅藍點
-    summarize_feature_value_by_true_label_in_errors(model, X_test, y_test, threshold, top_n=10)
+    # plot_error_scatter_matrix(model, X_test, y_test, threshold, label_filter="all")   # 同時畫紅藍點
+    # summarize_feature_value_by_true_label_in_errors(model, X_test, y_test, threshold, top_n=10, visualize= False)
+    # cat_features = ['active', 'smoke', 'alco', 'gender']
+    # plot_confusion_quadrant_heatmaps(X_test, y_test, preds, cat_features )
+
 

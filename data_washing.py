@@ -8,13 +8,13 @@ class CardioPreprocessor:
     def delete_strange(self):
         df = self.df
         # 年齡限制
-        df = df[(df['age'] / 365 >= 0) & (df['age'] / 365 <= 150)]
+        df = df[(df['age'] / 365 >= 0) & (df['age'] / 365 <= 110)]
         # 身高體重
-        df = df[(df['height'] >= 120) & (df['height'] <= 300)]
+        df = df[(df['height'] >= 140) & (df['height'] <= 220)]
         df = df[(df['weight'] >= 30) & (df['weight'] <= 200)]
         # 血壓範圍
-        df = df[(df['ap_hi'] >= 50) & (df['ap_hi'] <= 250)]
-        df = df[(df['ap_lo'] >= 30) & (df['ap_lo'] <= 200)]
+        df = df[(df['ap_hi'] >= 70) & (df['ap_hi'] <= 250)]
+        df = df[(df['ap_lo'] >= 40) & (df['ap_lo'] <= 150)]
         df = df[df['ap_hi'] > df['ap_lo']]
         self.df = df
         return self
@@ -47,11 +47,11 @@ class CardioPreprocessor:
         return self
 
     def process_bmi(self):
-        bmi_bins = [0, 18.5, 25, 30, 100]
-        bmi_labels = ['underweight','normal','overweight','obese']
+        # bmi_bins = [0, 18.5, 25, 30, 100]
+        # bmi_labels = ['underweight','normal','overweight','obese']
         self.df['BMI'] = self.df['weight'] / ((self.df['height']/100)**2)
         # self.categorize_and_onehot('BMI', bmi_bins, bmi_labels, 'BMI')
-        self.df.drop(columns=['weight','height'], inplace=True)
+        self.df.drop(columns=['height'], inplace=True)
         return self
 
     def process_bp(self):
@@ -69,6 +69,78 @@ class CardioPreprocessor:
         self.df = pd.concat([self.df, pd.get_dummies(self.df['bp_category'], prefix='bp', dtype=int)], axis=1)
         self.df.drop(columns=['ap_hi','ap_lo','bp_category'], inplace=True)
         return self
+    
+    def add_feature_interactions(self, features=None, prefix="interact"):
+        from itertools import combinations
+    
+        if features is None:
+            binary_cols = self.df.select_dtypes(include='number').columns
+            features = [col for col in binary_cols if self.df[col].dropna().isin([0, 1]).all()]
+    
+        interaction_cols = {}
+    
+        for f1, f2 in combinations(features, 2):
+            new_col = f"{prefix}_{f1}_{f2}"
+            interaction_cols[new_col] = ((self.df[f1] == 1) & (self.df[f2] == 0)).astype(int)
+    
+        # 一次性合併所有新欄位
+        interaction_df = pd.DataFrame(interaction_cols, index=self.df.index)
+        self.df = pd.concat([self.df, interaction_df], axis=1)
+        self.df = self.df.copy()  # 去碎片化
+
+    
+        return self
+
+
+    def add_feature_negative_interactions(self, features=None, prefix="neginteract"):
+        """
+        建立所有指定或自動偵測的 binary 特徵兩兩交叉欄位：
+        若 f1=1 且 f2=0，則標註為 1，否則為 0。
+        """
+        from itertools import combinations
+    
+        if features is None:
+            binary_cols = self.df.select_dtypes(include='number').columns
+            features = [col for col in binary_cols if self.df[col].dropna().isin([0, 1]).all()]
+    
+        interaction_cols = {}
+        for f1, f2 in combinations(features, 2):
+            new_col = f"{prefix}_{f1}_{f2}"
+            interaction_cols[new_col] = ((self.df[f1] == 1) & (self.df[f2] == 0)).astype(int)
+    
+        interaction_df = pd.DataFrame(interaction_cols, index=self.df.index)
+        self.df = pd.concat([self.df, interaction_df], axis=1)
+        self.df = self.df.copy()  # 去碎片化
+    
+        return self
+    
+
+    def add_health_factor(self):
+        """
+        在 DataFrame 中新增 'health_factor' 欄位：
+        active * 1 + smoke * -0.5 + alco * 0.5
+        """
+        self.df['health_factor'] = self.df['active'] * 1 + self.df['smoke'] * -0.5 + self.df['alco'] * 0.5
+        self.df = self.df.drop(columns=['alco'])
+        return self
+    
+    def add_pulse_pressure(self):
+        """
+        在 DataFrame 中新增 'pulse_pressure' 欄位：
+        ap_hi - ap_lo
+        """
+        self.df['pulse_pressure'] = self.df['ap_hi'] - self.df['ap_lo']
+        return self
+    
+    def add_cholesterol_gluc_interaction(self):
+        """
+        在 DataFrame 中新增 'cholesterol_gluc_interaction' 欄位：
+        cholesterol * gluc
+        """
+        self.df['cholesterol_gluc_interaction'] = self.df['cholesterol'] * self.df['gluc']
+        return self
+    
+   
 
     def standardize(self):
         from sklearn.preprocessing import StandardScaler
@@ -85,9 +157,25 @@ class CardioPreprocessor:
          .process_age()
          # .process_gender()
          .process_bmi()
+         .add_pulse_pressure()
+         .add_cholesterol_gluc_interaction()
+         .add_health_factor()
          # .process_bp()
-         .standardize()
+         # .add_feature_interactions(['smoke','alco','active','chole_nor','chole_abnor',
+         #                            'chole_wellabnor','gluc_nor','gluc_abnor','gluc_wellabnor',
+         #                            'age_young_adult','age_early_middle','age_middle',
+         #                            'age_late_middle','male','female','BMI_underweight',
+         #                            'BMI_normal','BMI_overweight','BMI_obese','bp_above_normal',
+         #                            'bp_first','bp_normal','bp_second'])
+         # .add_feature_negative_interactions(['smoke','alco','active','chole_nor','chole_abnor',
+         #                            'chole_wellabnor','gluc_nor','gluc_abnor','gluc_wellabnor',
+         #                            'age_young_adult','age_early_middle','age_middle',
+         #                            'age_late_middle','male','female','BMI_underweight',
+         #                            'BMI_normal','BMI_overweight','BMI_obese','bp_above_normal',
+         #                            'bp_first','bp_normal','bp_second'])
+         # .standardize()
         )
+        # self.df = self.df.loc[:, (self.df != 0).any(axis=0)]
         # self.df = self.df.drop(columns=['gender', 'alco', 'smoke','active'])
         return self.df
     
@@ -150,11 +238,11 @@ if __name__ == "__main__":
     summary = X_processed.groupby(y).mean().T
     summary['diff'] = summary[1] - summary[0]
     print(summary.sort_values('diff', ascending=False))
-    plot_3d_scatter(
-        X_processed.assign(
-            ap_hi= X_processed['ap_hi'],
-            ap_lo= X_processed['ap_lo'],
-            age_years= X_processed['age_years'] 
-        ),
-        y
-    )
+    # plot_3d_scatter(
+    #     X_processed.assign(
+    #         ap_hi= X_processed['ap_hi'],
+    #         ap_lo= X_processed['ap_lo'],
+    #         age_years= X_processed['age_years'] 
+    #     ),
+    #     y
+    # )
