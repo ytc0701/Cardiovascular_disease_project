@@ -25,3 +25,15 @@ config.ini
 
 # CatBoost training logs
 catboost_info/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VSCode 設定
+.vscode/
+
+# macOS / Windows 系統檔
+.DS_Store
+Thumbs.db
+
+models_cache/
