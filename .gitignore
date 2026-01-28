@@ -12,12 +12,16 @@ data/
 *.h5
 *.pkl
 
-# 環境設定
+# 圖片輸出（分析結果）
+*.png
+
+# 環境設定（含敏感資訊）
 .env
+config.ini
 
 # 日誌與暫存
 *.log
 *.tmp
 
-# Ignore CatBoost training logs
+# CatBoost training logs
 catboost_info/
